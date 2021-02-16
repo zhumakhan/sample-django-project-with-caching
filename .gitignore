@@ -1,0 +1,15 @@
+./logs
+./media
+./static
+./src/media
+./src/staticfiles
+./src/celerybeat-schedule
+
+logs
+media
+static
+src/media
+src/staticfiles
+src/celerybeat-schedule
+*__pycache__
+__pycache__

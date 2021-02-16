@@ -1,0 +1,9 @@
+{
+"Amount":{{Amount}},
+"Currency":"{{Currency}}",
+"Description":"{{Description}}",
+"Email":"{{Email}}",
+"InvoiceId":{{InvoiceId}},
+"RequireConfirmation":{{RequireConfirmation}},
+"SendEmail":{{SendEmail}},
+}

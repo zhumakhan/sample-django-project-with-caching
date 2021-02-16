@@ -1,0 +1,72 @@
+image: docker:latest
+stages:
+  - build
+  - test
+  - deploy
+
+services:
+  - docker:18.09.8-dind
+
+variables:
+  DOCKER_HOST: tcp://docker:2375/
+  DOCKER_DRIVER: overlay2
+  REGISTRY_NAME: registry.gitlab.com
+  CONTAINER_IMAGE_NAME: registry.gitlab.com/some/repository
+  CONTAINER_CURRENT_IMAGE_NAME: $CONTAINER_IMAGE_NAME:$CI_COMMIT_REF_SLUG
+
+
+.build: &build
+  tags:
+    - docker
+  stage: build
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $REGISTRY_NAME
+    - docker build -t $CONTAINER_CURRENT_IMAGE_NAME .
+    - docker push $CONTAINER_CURRENT_IMAGE_NAME
+
+.test: &test
+  tags:
+    - docker 
+  stage: test
+  before_script:
+    - apk add docker-compose
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $REGISTRY_NAME
+    - cd deploy/test/ && docker-compose pull && docker-compose down
+    - docker-compose up --abort-on-container-exit && docker-compose down
+
+.deploy: &deploy
+  tags:
+    - docker
+  stage: deploy
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $REGISTRY_NAME
+    - sed -i 's/dl-cdn.alpinelinux.org/mirror.neolabs.kz/g' /etc/apk/repositories
+    - 'which ssh-agent || ( apk update && apk add -qq openssh )'
+    - eval $(ssh-agent -s) && echo "$SSH_PRIVATE_KEY" | ssh-add - && mkdir -p ~/.ssh
+    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+  script:
+    - scp -rp $LOCAL_PATH root@$DEPLOY_HOST:$DEPLOY_PATH
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $REGISTRY_NAME
+    - ssh root@$DEPLOY_HOST "docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $REGISTRY_NAME && 
+      cd $DEPLOY_PATH && 
+      docker-compose stop &&  
+      docker-compose  down -v && 
+      docker-compose  pull  && 
+      docker-compose  up -d && 
+      docker system prune  -f"
+
+build:
+  <<: *build
+
+# test:
+#   <<: *test_prop
+
+deploy_prod:
+  variables:
+    DEPLOY_HOST: "hostname"
+    DEPLOY_PATH: "DEPLOT/PATH"
+    LOCAL_PATH: "deploy/prod/*"
+  <<: *deploy
+  only:
+    - master
